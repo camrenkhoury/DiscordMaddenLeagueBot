@@ -1,0 +1,40 @@
+MADDEN DISCORD BOT — COMMAND LIST
+================================
+
+!addplayer <name>
+Adds a new player to the league with a 0–0 record and no points.
+
+!removeplayer <name>
+(Admin only) Removes a player ONLY if they have 0 games played and no recorded stats.
+
+!game <player1> <score1> <player2> <score2>
+Records a regular-season game between two existing players and updates standings.
+If playoff mode is active, this instead attempts to record a valid playoff game.
+
+!standings
+Displays the current regular-season standings, sorted by wins, losses, and point differential.
+
+!resetseason
+(Admin only) Resets the current season standings and games.
+Players remain, but all records are cleared and the season number increments.
+Cannot be used during playoff mode.
+
+!playoffmode
+(Admin only) Locks regular-season standings and starts playoff mode.
+Generates and locks the playoff bracket.
+
+!currentplayoff
+Displays the current playoff bracket, including:
+- Play-In (if applicable)
+- Round 1
+- Round 2 (bye teams)
+- Super Bowl path
+Shown as a visual ASCII bracket.
+
+--------------------------------
+NOTES
+--------------------------------
+- Play-In games only exist if the total number of teams is odd.
+- Seeds 1 and 2 receive first-round byes and appear in Round 2.
+- Playoff games must match the bracket or they will be rejected.
+- Regular-season standings are locked once playoff mode begins.
