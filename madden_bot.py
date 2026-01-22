@@ -276,7 +276,14 @@ async def playoffmode(ctx):
 
 @bot.command()
 async def currentplayoff(ctx):
+@bot.command()
+async def currentplayoff(ctx):
     data = load_data()
+
+    if len(data["players"]) < 4:
+        await ctx.send("❌ Need at least 4 players to generate a playoff bracket.")
+        return
+
     bracket = data["playoffs"]["bracket"] or generate_playoff_bracket(data)
     seed_map = get_seed_map(data)
 
@@ -284,6 +291,7 @@ async def currentplayoff(ctx):
     msg += render_ascii_bracket(bracket, seed_map)
 
     await ctx.send(msg)
+
 
 # --------------------
 # Season archive
