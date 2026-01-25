@@ -59,12 +59,13 @@ def get_seeds(data):
     return sorted(
         data["players"].items(),
         key=lambda x: (
-            -x[1]["wins"],
-            x[1]["losses"],
-            -(x[1]["points_for"] - x[1]["points_against"]),
-            x[0].lower()
+            -win_pct(x[1]["wins"], x[1]["losses"]),   # win %
+            -point_diff(x[1]),                        # point diff
+            -x[1]["points_for"],                      # points for
+            x[0].lower()                              # name tiebreak
         )
     )
+
 
 def get_seed_map(data):
     seeds = get_seeds(data)
@@ -227,10 +228,28 @@ async def standings(ctx):
     table = get_seeds(data)
 
     msg = "**Standings**\n"
-    for p, s in table:
-        msg += f"{p}: {s['wins']}-{s['losses']} | PF {s['points_for']} PA {s['points_against']}\n"
+    msg += "```\n"
+    msg += f"{'RK':<3} {'TEAM':<12} {'REC':<7} {'PCT':<6} {'PF':<5} {'PA':<5} {'DIFF':<5}\n"
+    msg += "-" * 50 + "\n"
 
+    for idx, (team, s) in enumerate(table, start=1):
+        pct = win_pct(s["wins"], s["losses"])
+        diff = point_diff(s)
+        diff_str = f"+{diff}" if diff > 0 else str(diff)
+
+        msg += (
+            f"{idx:<3} "
+            f"{team:<12} "
+            f"{s['wins']}-{s['losses']:<7} "
+            f"{pct:.3f} "
+            f"{s['points_for']:<5} "
+            f"{s['points_against']:<5} "
+            f"{diff_str:<5}\n"
+        )
+
+    msg += "```"
     await ctx.send(msg)
+
 
 @bot.command()
 async def resetseason(ctx):
@@ -348,5 +367,13 @@ async def removeplayer(ctx, name: str):
 
     await ctx.send(f"✅ Player `{name}` has been removed.")
 
+def win_pct(wins, losses):
+    games = wins + losses
+    if games == 0:
+        return 0.000
+    return wins / games
+
+def point_diff(player):
+    return player["points_for"] - player["points_against"]
 
 bot.run("Enter Discord Seed Here")
