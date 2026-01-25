@@ -9,6 +9,15 @@ DATA_FILE = "league.json"
 # Data helpers
 # --------------------
 
+def win_pct(wins, losses):
+    games = wins + losses
+    if games == 0:
+        return 0.000
+    return wins / games
+
+def point_diff(player):
+    return player["points_for"] - player["points_against"]
+
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {
@@ -199,7 +208,11 @@ async def game(ctx, p1: str, s1: int, p2: str, s2: int):
     await ctx.send(f"Final: {p1} {s1} – {p2} {s2}")
 
 async def handle_playoff_game(ctx, data, p1, s1, p2, s2):
-    bracket = data["playoffs"]["bracket"]
+    bracket = data["playoffs"].get("bracket")
+    if not bracket:
+        await ctx.send("❌ Playoff bracket not initialized.")
+        return
+
     valid_games = []
 
     if bracket["play_in"]:
@@ -295,8 +308,6 @@ async def playoffmode(ctx):
 
 @bot.command()
 async def currentplayoff(ctx):
-@bot.command()
-async def currentplayoff(ctx):
     data = load_data()
 
     if len(data["players"]) < 4:
@@ -367,13 +378,5 @@ async def removeplayer(ctx, name: str):
 
     await ctx.send(f"✅ Player `{name}` has been removed.")
 
-def win_pct(wins, losses):
-    games = wins + losses
-    if games == 0:
-        return 0.000
-    return wins / games
-
-def point_diff(player):
-    return player["points_for"] - player["points_against"]
 
 bot.run("Enter Discord Seed Here")
