@@ -9,6 +9,53 @@ DATA_FILE = "league.json"
 # Data helpers
 # --------------------
 
+def normalize_team_name(name: str) -> str:
+    # Allows case-insensitive matching and names with spaces if user quotes them.
+    return name.strip()
+
+def head_to_head(data, team_a: str, team_b: str):
+    """
+    Returns (a_wins, b_wins, ties, a_pf, a_pa, games_played)
+    computed from data["games"] only (regular season history).
+    """
+    a = team_a
+    b = team_b
+
+    a_wins = b_wins = ties = 0
+    a_pf = a_pa = 0
+    played = 0
+
+    for g in data.get("games", []):
+        p1, s1, p2, s2 = g["p1"], g["s1"], g["p2"], g["s2"]
+
+        # Match regardless of ordering in the saved game
+        if {p1, p2} != {a, b}:
+            continue
+
+        played += 1
+
+        if p1 == a and p2 == b:
+            a_pf += s1
+            a_pa += s2
+            if s1 > s2:
+                a_wins += 1
+            elif s2 > s1:
+                b_wins += 1
+            else:
+                ties += 1
+        else:
+            # p1 == b and p2 == a
+            a_pf += s2
+            a_pa += s1
+            if s2 > s1:
+                a_wins += 1
+            elif s1 > s2:
+                b_wins += 1
+            else:
+                ties += 1
+
+    return a_wins, b_wins, ties, a_pf, a_pa, played
+
 def win_pct(wins, losses):
     games = wins + losses
     if games == 0:
@@ -105,6 +152,63 @@ def generate_playoff_bracket(data):
         )
 
     return bracket
+
+@bot.command(name="h2h")
+async def h2h(ctx, *, teams: str):
+    """
+    Usage:
+      !h2h TeamA vs TeamB
+      !h2h "Team A" vs "Team B"
+    """
+    data = load_data()
+
+    # Parse "TeamA vs TeamB" (allow VS/vs/Vs)
+    parts = teams.split(" vs ")
+    if len(parts) != 2:
+        parts = teams.split(" VS ")
+    if len(parts) != 2:
+        parts = teams.split(" Vs ")
+    if len(parts) != 2:
+        await ctx.send('❌ Usage: `!h2h TeamA vs TeamB` (use quotes for spaces)')
+        return
+
+    team_a = normalize_team_name(parts[0].strip().strip('"').strip("'"))
+    team_b = normalize_team_name(parts[1].strip().strip('"').strip("'"))
+
+    if team_a == team_b:
+        await ctx.send("❌ Pick two different teams.")
+        return
+
+    # Validate teams exist
+    if team_a not in data["players"] or team_b not in data["players"]:
+        missing = []
+        if team_a not in data["players"]:
+            missing.append(team_a)
+        if team_b not in data["players"]:
+            missing.append(team_b)
+        await ctx.send(f"❌ Unknown team(s): {', '.join(missing)}")
+        return
+
+    a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(data, team_a, team_b)
+
+    if played == 0:
+        await ctx.send(f"**Head-to-Head:** {team_a} vs {team_b}\nNo games recorded.")
+        return
+
+    diff = a_pf - a_pa
+    diff_str = f"+{diff}" if diff > 0 else str(diff)
+
+    msg = f"**Head-to-Head:** {team_a} vs {team_b}\n"
+    msg += "```\n"
+    msg += f"Games: {played}\n"
+    msg += f"{team_a}: {a_wins}-{b_wins}"
+    if ties:
+        msg += f"-{ties}"
+    msg += "\n"
+    msg += f"PF/PA: {a_pf}/{a_pa}  DIFF: {diff_str}\n"
+    msg += "```"
+
+    await ctx.send(msg)
 
 def label(team, seed_map):
     if team == "Play-In Winner":
