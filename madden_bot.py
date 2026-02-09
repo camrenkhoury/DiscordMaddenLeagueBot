@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import json
 import os
-
+from info import DISCORD_TOKEN
 DATA_FILE = "league.json"
 
 # --------------------
@@ -55,6 +55,56 @@ def head_to_head(data, team_a: str, team_b: str):
                 ties += 1
 
     return a_wins, b_wins, ties, a_pf, a_pa, played
+
+from collections import defaultdict
+
+def top_h2h_by_winpct(data, limit=10, min_games=2):
+    stats = defaultdict(lambda: {
+        "games": 0,
+        "wins": defaultdict(int)
+    })
+
+    for g in data.get("games", []):
+        p1, p2 = g["p1"], g["p2"]
+        s1, s2 = g["s1"], g["s2"]
+
+        key = tuple(sorted([p1, p2]))
+        stats[key]["games"] += 1
+
+        if s1 > s2:
+            stats[key]["wins"][p1] += 1
+        elif s2 > s1:
+            stats[key]["wins"][p2] += 1
+
+    results = []
+
+    for (a, b), v in stats.items():
+        games = v["games"]
+        if games < min_games:
+            continue
+
+        a_wins = v["wins"][a]
+        b_wins = v["wins"][b]
+
+        if a_wins >= b_wins:
+            winner, loser = a, b
+            w_wins, l_wins = a_wins, b_wins
+        else:
+            winner, loser = b, a
+            w_wins, l_wins = b_wins, a_wins
+
+        win_pct = w_wins / games
+
+        results.append({
+            "winner": winner,
+            "loser": loser,
+            "games": games,
+            "record": f"{w_wins}-{l_wins}",
+            "win_pct": win_pct
+        })
+
+    results.sort(key=lambda x: (-x["win_pct"], -x["games"]))
+    return results[:limit]
 
 def win_pct(wins, losses):
     games = wins + losses
@@ -339,6 +389,35 @@ async def handle_playoff_game(ctx, data, p1, s1, p2, s2):
     save_data(data)
     await ctx.send(f"🏆 Playoff Final: {p1} {s1} – {p2} {s2}")
 
+
+@bot.command(name="top_h2h")
+async def top_h2h(ctx):
+    data = load_data()
+    records = top_h2h_by_winpct(data, limit=10, min_games=2)
+
+    if not records:
+        await ctx.send("No head-to-head matchups with at least 2 games.")
+        return
+
+    msg = "**Top 10 Head-to-Head Matchups (by Win %)**\n"
+    msg += "_Winner listed first • minimum 2 games_\n"
+    msg += "```\n"
+    msg += f"{'RK':<3} {'MATCHUP':<28} {'GP':<3} {'REC':<7} {'PCT'}\n"
+    msg += "-" * 55 + "\n"
+
+    for i, r in enumerate(records, start=1):
+        matchup = f"{r['winner']} vs {r['loser']}"
+        msg += (
+            f"{i:<3} "
+            f"{matchup:<28} "
+            f"{r['games']:<3} "
+            f"{r['record']:<7} "
+            f"{r['win_pct']:.3f}\n"
+        )
+
+    msg += "```"
+    await ctx.send(msg)
+
 @bot.command()
 async def standings(ctx):
     data = load_data()
@@ -483,4 +562,4 @@ async def removeplayer(ctx, name: str):
     await ctx.send(f"✅ Player `{name}` has been removed.")
 
 
-bot.run("Enter Discord Seed Here")
+bot.run(DISCORD_TOKEN)
