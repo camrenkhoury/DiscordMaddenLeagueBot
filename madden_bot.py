@@ -205,9 +205,6 @@ def generate_playoff_bracket(data):
 
 @bot.command(name="top_h2h")
 async def top_h2h(ctx):
-    """
-    Shows head-to-head matchups sorted by largest point differential.
-    """
     data = load_data()
     teams = list(data["players"].keys())
 
@@ -217,58 +214,49 @@ async def top_h2h(ctx):
 
     results = []
 
-    # Check every unique pair
     for i in range(len(teams)):
         for j in range(i + 1, len(teams)):
             team_a = teams[i]
             team_b = teams[j]
 
-            a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(data, team_a, team_b)
+            a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(
+                data, team_a, team_b
+            )
 
             if played == 0:
                 continue
 
-            diff = a_pf - a_pa  # differential from team_a perspective
+            diff = a_pf - a_pa
 
-            results.append({
-                "team_a": team_a,
-                "team_b": team_b,
-                "played": played,
-                "a_wins": a_wins,
-                "b_wins": b_wins,
-                "ties": ties,
-                "a_pf": a_pf,
-                "a_pa": a_pa,
-                "diff": diff
-            })
+            results.append(
+                {
+                    "matchup": f"{team_a} vs {team_b}",
+                    "played": played,
+                    "record": f"{a_wins}-{b_wins}" + (f"-{ties}" if ties else ""),
+                    "pfpa": f"{a_pf}/{a_pa}",
+                    "diff": diff,
+                }
+            )
 
     if not results:
         await ctx.send("No head-to-head games recorded.")
         return
 
-    # Sort by largest absolute differential
     results.sort(key=lambda x: abs(x["diff"]), reverse=True)
 
     msg = "**Top Head-to-Head Point Differentials**\n"
     msg += "```\n"
-    msg += f"{'MATCHUP':<28} {'GMS':<4} {'REC':<8} {'PF/PA':<12} {'DIFF':<6}\n"
-    msg += "-" * 65 + "\n"
+    msg += f"{'MATCHUP':<30} {'GMS':<4} {'REC':<8} {'PF/PA':<10} {'DIFF':<6}\n"
+    msg += "-" * 70 + "\n"
 
-    for r in results[:10]:  # top 10 biggest differentials
-        diff = r["diff"]
-        diff_str = f"+{diff}" if diff > 0 else str(diff)
-
-        rec = f"{r['a_wins']}-{r['b_wins']}"
-        if r["ties"]:
-            rec += f"-{r['ties']}"
-
-        matchup = f"{r['team_a']} vs {r['team_b']}"
+    for r in results[:10]:
+        diff_str = f"+{r['diff']}" if r["diff"] > 0 else str(r["diff"])
 
         msg += (
-            f"{matchup:<28} "
+            f"{r['matchup']:<30} "
             f"{r['played']:<4} "
-            f"{rec:<8} "
-            f"{r['a_pf']}/{r['a_pa']:<12} "
+            f"{r['record']:<8} "
+            f"{r['pfpa']:<10} "
             f"{diff_str:<6}\n"
         )
 
