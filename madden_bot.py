@@ -153,59 +153,75 @@ def generate_playoff_bracket(data):
 
     return bracket
 
-@bot.command(name="h2h")
-async def h2h(ctx, *, teams: str):
+@bot.command(name="top_h2h")
+async def top_h2h(ctx):
     """
-    Usage:
-      !h2h TeamA vs TeamB
-      !h2h "Team A" vs "Team B"
+    Shows head-to-head matchups sorted by largest point differential.
     """
     data = load_data()
+    teams = list(data["players"].keys())
 
-    # Parse "TeamA vs TeamB" (allow VS/vs/Vs)
-    parts = teams.split(" vs ")
-    if len(parts) != 2:
-        parts = teams.split(" VS ")
-    if len(parts) != 2:
-        parts = teams.split(" Vs ")
-    if len(parts) != 2:
-        await ctx.send('❌ Usage: `!h2h TeamA vs TeamB` (use quotes for spaces)')
+    if len(teams) < 2:
+        await ctx.send("❌ Not enough teams.")
         return
 
-    team_a = normalize_team_name(parts[0].strip().strip('"').strip("'"))
-    team_b = normalize_team_name(parts[1].strip().strip('"').strip("'"))
+    results = []
 
-    if team_a == team_b:
-        await ctx.send("❌ Pick two different teams.")
+    # Check every unique pair
+    for i in range(len(teams)):
+        for j in range(i + 1, len(teams)):
+            team_a = teams[i]
+            team_b = teams[j]
+
+            a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(data, team_a, team_b)
+
+            if played == 0:
+                continue
+
+            diff = a_pf - a_pa  # differential from team_a perspective
+
+            results.append({
+                "team_a": team_a,
+                "team_b": team_b,
+                "played": played,
+                "a_wins": a_wins,
+                "b_wins": b_wins,
+                "ties": ties,
+                "a_pf": a_pf,
+                "a_pa": a_pa,
+                "diff": diff
+            })
+
+    if not results:
+        await ctx.send("No head-to-head games recorded.")
         return
 
-    # Validate teams exist
-    if team_a not in data["players"] or team_b not in data["players"]:
-        missing = []
-        if team_a not in data["players"]:
-            missing.append(team_a)
-        if team_b not in data["players"]:
-            missing.append(team_b)
-        await ctx.send(f"❌ Unknown team(s): {', '.join(missing)}")
-        return
+    # Sort by largest absolute differential
+    results.sort(key=lambda x: abs(x["diff"]), reverse=True)
 
-    a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(data, team_a, team_b)
-
-    if played == 0:
-        await ctx.send(f"**Head-to-Head:** {team_a} vs {team_b}\nNo games recorded.")
-        return
-
-    diff = a_pf - a_pa
-    diff_str = f"+{diff}" if diff > 0 else str(diff)
-
-    msg = f"**Head-to-Head:** {team_a} vs {team_b}\n"
+    msg = "**Top Head-to-Head Point Differentials**\n"
     msg += "```\n"
-    msg += f"Games: {played}\n"
-    msg += f"{team_a}: {a_wins}-{b_wins}"
-    if ties:
-        msg += f"-{ties}"
-    msg += "\n"
-    msg += f"PF/PA: {a_pf}/{a_pa}  DIFF: {diff_str}\n"
+    msg += f"{'MATCHUP':<28} {'GMS':<4} {'REC':<8} {'PF/PA':<12} {'DIFF':<6}\n"
+    msg += "-" * 65 + "\n"
+
+    for r in results[:10]:  # top 10 biggest differentials
+        diff = r["diff"]
+        diff_str = f"+{diff}" if diff > 0 else str(diff)
+
+        rec = f"{r['a_wins']}-{r['b_wins']}"
+        if r["ties"]:
+            rec += f"-{r['ties']}"
+
+        matchup = f"{r['team_a']} vs {r['team_b']}"
+
+        msg += (
+            f"{matchup:<28} "
+            f"{r['played']:<4} "
+            f"{rec:<8} "
+            f"{r['a_pf']}/{r['a_pa']:<12} "
+            f"{diff_str:<6}\n"
+        )
+
     msg += "```"
 
     await ctx.send(msg)
