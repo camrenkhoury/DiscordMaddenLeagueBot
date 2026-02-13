@@ -203,67 +203,6 @@ def generate_playoff_bracket(data):
 
     return bracket
 
-@bot.command(name="top_h2h")
-async def top_h2h(ctx):
-    data = load_data()
-    teams = list(data["players"].keys())
-
-    if len(teams) < 2:
-        await ctx.send("❌ Not enough teams.")
-        return
-
-    results = []
-
-    for i in range(len(teams)):
-        for j in range(i + 1, len(teams)):
-            team_a = teams[i]
-            team_b = teams[j]
-
-            a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(
-                data, team_a, team_b
-            )
-
-            if played == 0:
-                continue
-
-            diff = a_pf - a_pa
-
-            results.append(
-                {
-                    "matchup": f"{team_a} vs {team_b}",
-                    "played": played,
-                    "record": f"{a_wins}-{b_wins}" + (f"-{ties}" if ties else ""),
-                    "pfpa": f"{a_pf}/{a_pa}",
-                    "diff": diff,
-                }
-            )
-
-    if not results:
-        await ctx.send("No head-to-head games recorded.")
-        return
-
-    results.sort(key=lambda x: abs(x["diff"]), reverse=True)
-
-    msg = "**Top Head-to-Head Point Differentials**\n"
-    msg += "```\n"
-    msg += f"{'MATCHUP':<30} {'GMS':<4} {'REC':<8} {'PF/PA':<10} {'DIFF':<6}\n"
-    msg += "-" * 70 + "\n"
-
-    for r in results[:10]:
-        diff_str = f"+{r['diff']}" if r["diff"] > 0 else str(r["diff"])
-
-        msg += (
-            f"{r['matchup']:<30} "
-            f"{r['played']:<4} "
-            f"{r['record']:<8} "
-            f"{r['pfpa']:<10} "
-            f"{diff_str:<6}\n"
-        )
-
-    msg += "```"
-
-    await ctx.send(msg)
-
 def label(team, seed_map):
     if team == "Play-In Winner":
         return "PI WIN"
@@ -397,26 +336,73 @@ async def handle_playoff_game(ctx, data, p1, s1, p2, s2):
 @bot.command(name="top_h2h")
 async def top_h2h(ctx):
     data = load_data()
-    records = top_h2h_by_winpct(data, limit=10, min_games=2)
+    teams = list(data["players"].keys())
 
-    if not records:
+    if len(teams) < 2:
+        await ctx.send("❌ Not enough teams.")
+        return
+
+    results = []
+
+    for i in range(len(teams)):
+        for j in range(i + 1, len(teams)):
+            team_a = teams[i]
+            team_b = teams[j]
+
+            a_wins, b_wins, ties, a_pf, a_pa, played = head_to_head(
+                data, team_a, team_b
+            )
+
+            if played < 2:
+                continue  # minimum 2 games
+
+            if a_wins >= b_wins:
+                winner = team_a
+                loser = team_b
+                w_wins = a_wins
+                l_wins = b_wins
+                diff = a_pf - a_pa
+            else:
+                winner = team_b
+                loser = team_a
+                w_wins = b_wins
+                l_wins = a_wins
+                diff = a_pa - a_pf
+
+            winpct = w_wins / played
+
+            results.append({
+                "winner": winner,
+                "loser": loser,
+                "games": played,
+                "record": f"{w_wins}-{l_wins}" + (f"-{ties}" if ties else ""),
+                "win_pct": winpct,
+                "diff": diff
+            })
+
+    if not results:
         await ctx.send("No head-to-head matchups with at least 2 games.")
         return
 
-    msg = "**Top 10 Head-to-Head Matchups (by Win %)**\n"
+    results.sort(key=lambda x: (-x["win_pct"], -abs(x["diff"])))
+
+    msg = "**Top Head-to-Head Matchups**\n"
     msg += "_Winner listed first • minimum 2 games_\n"
     msg += "```\n"
-    msg += f"{'RK':<3} {'MATCHUP':<28} {'GP':<3} {'REC':<7} {'PCT'}\n"
-    msg += "-" * 55 + "\n"
+    msg += f"{'RK':<3} {'MATCHUP':<28} {'GP':<3} {'REC':<8} {'PCT':<6} {'DIFF'}\n"
+    msg += "-" * 65 + "\n"
 
-    for i, r in enumerate(records, start=1):
+    for i, r in enumerate(results[:10], start=1):
+        diff_str = f"+{r['diff']}" if r["diff"] > 0 else str(r["diff"])
         matchup = f"{r['winner']} vs {r['loser']}"
+
         msg += (
             f"{i:<3} "
             f"{matchup:<28} "
             f"{r['games']:<3} "
-            f"{r['record']:<7} "
-            f"{r['win_pct']:.3f}\n"
+            f"{r['record']:<8} "
+            f"{r['win_pct']:.3f} "
+            f"{diff_str}\n"
         )
 
     msg += "```"
